@@ -11,7 +11,7 @@ genMCMC = function( data , xName="x" , x2Name = "x2", yName="y" , sName="s" ,
                     numSavedSteps=10000 , thinSteps = 1 , saveName=NULL ,
                     runjagsMethod=runjagsMethodDefault , 
                     nChains=nChainsDefault) { 
-
+  
   #-----------------------------------------------------------------------------
   # THE DATA.
   y = data[,yName]
@@ -36,50 +36,50 @@ genMCMC = function( data , xName="x" , x2Name = "x2", yName="y" , sName="s" ,
   modelString = "
   # Standardize the data:
   data {
-    Ntotal <- length(y)
-    xm <- mean(x)
-    x2m <- mean(x2)
-    ym <- mean(y)
-    xsd <- sd(x)
-    x2sd <- sd(x2)
-    ysd <- sd(y)
-    for ( i in 1:length(y) ) {
-      zx[i] <- ( x[i] - xm ) / xsd
-      zx2[i] <- ( x2[i] - x2m ) / x2sd
-      zy[i] <- ( y[i] - ym ) / ysd
-    }
+  Ntotal <- length(y)
+  xm <- mean(x)
+  x2m <- mean(x2)
+  ym <- mean(y)
+  xsd <- sd(x)
+  x2sd <- sd(x2)
+  ysd <- sd(y)
+  for ( i in 1:length(y) ) {
+  zx[i] <- ( x[i] - xm ) / xsd
+  zx2[i] <- ( x2[i] - x2m ) / x2sd
+  zy[i] <- ( y[i] - ym ) / ysd
+  }
   }
   # Specify the model for standardized data:
   model {
-    for ( i in 1:Ntotal ) {
-      zy[i] ~ dt( zbeta0[s[i]] + zbeta1[s[i]] * zx[i] , zbeta2[s[i]] * zx2[i], 1/zsigma^2 , nu )
-    }
-    for ( j in 1:Nsubj ) {
-      zbeta0[j] ~ dnorm( zbeta0mu , 1/(zbeta0sigma)^2 )  
-      zbeta1[j] ~ dnorm( zbeta1mu , 1/(zbeta1sigma)^2 )
-      zbeta2[j] ~ dnorm( zbeta2mu , 1/(zbeta2sigma)^2 )
+  for ( i in 1:Ntotal ) {
+  zy[i] ~ dt( zbeta0[s[i]] + zbeta1[s[i]] * zx[i] + zbeta2[s[i]] * zx2[i], 1/zsigma^2 , nu )
+  }
+  for ( j in 1:Nsubj ) {
+  zbeta0[j] ~ dnorm( zbeta0mu , 1/(zbeta0sigma)^2 )  
+  zbeta1[j] ~ dnorm( zbeta1mu , 1/(zbeta1sigma)^2 )
+  zbeta2[j] ~ dnorm( zbeta2mu , 1/(zbeta2sigma)^2 )
 
-    }
-    # Priors vague on standardized scale:
-    zbeta0mu ~ dnorm( 0 , 1/(10)^2 )
-    zbeta1mu ~ dnorm( 0 , 1/(10)^2 )
-    zbeta2mu ~ dnorm( 0 , 1/(10)^2 )
-    zsigma ~ dunif( 1.0E-3 , 1.0E+3 )
-    zbeta0sigma ~ dunif( 1.0E-3 , 1.0E+3 )
-    zbeta1sigma ~ dunif( 1.0E-3 , 1.0E+3 )
-    zbeta2sigma ~ dunif( 1.0E-3 , 1.0E+3 )
-
-    nu ~ dexp(1/30.0)
-    # Transform to original scale:
-    for ( j in 1:Nsubj ) {
-      beta1[j] <- zbeta1[j] * ysd / xsd 
-      beta2[j] <- zbeta2[j] * ysd / xsd
-      beta0[j] <- zbeta0[j] * ysd  + ym - zbeta1[j] * xm * ysd / xsd + zbeta2[j] * x2m * ysd / x2sd
-    }
-    beta1mu <- zbeta1mu * ysd / xsd
-    beta2mu <- zbeta2mu * ysd / xsd
-    beta0mu <- zbeta0mu * ysd  + ym - zbeta1mu * xm * ysd / xsd + zbeta2mu * x2m * ysd / x2sd
-    sigma <- zsigma * ysd
+  }
+  # Priors vague on standardized scale:
+  zbeta0mu ~ dnorm( 0 , 1/(10)^2 )
+  zbeta1mu ~ dnorm( 0 , 1/(10)^2 )
+  zbeta2mu ~ dnorm( 0 , 1/(10)^2 )
+  zsigma ~ dunif( 1.0E-3 , 1.0E+3 )
+  zbeta0sigma ~ dunif( 1.0E-3 , 1.0E+3 )
+  zbeta1sigma ~ dunif( 1.0E-3 , 1.0E+3 )
+  zbeta2sigma ~ dunif( 1.0E-3 , 1.0E+3 )
+  
+  nu ~ dexp(1/30.0)
+  # Transform to original scale:
+  for ( j in 1:Nsubj ) {
+  beta1[j] <- zbeta1[j] * ysd / xsd 
+  beta2[j] <- zbeta2[j] * ysd / xsd
+  beta0[j] <- zbeta0[j] * ysd  + ym - zbeta1[j] * xm * ysd / xsd + zbeta2[j] * x2m * ysd / x2sd
+  }
+  beta1mu <- zbeta1mu * ysd / xsd
+  beta2mu <- zbeta2mu * ysd / xsd
+  beta0mu <- zbeta0mu * ysd  + ym - zbeta1mu * xm * ysd / xsd + zbeta2mu * x2m * ysd / x2sd
+  sigma <- zsigma * ysd
   }
   " # close quote for modelString
   # Write out modelString to a text file
@@ -109,7 +109,7 @@ genMCMC = function( data , xName="x" , x2Name = "x2", yName="y" , sName="s" ,
   codaSamples = as.mcmc.list( runJagsOut )
   # resulting codaSamples object has these indices: 
   #   codaSamples[[ chainIdx ]][ stepIdx , paramIdx ]
-
+  
   if ( !is.null(saveName) ) {
     save( codaSamples , file=paste(saveName,"Mcmc.Rdata",sep="") )
   }
