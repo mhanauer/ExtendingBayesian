@@ -86,8 +86,6 @@ genMCMC = function( data , xName="x" , yName="y" , sName="s" , wName=NULL ,
   # Write out modelString to a text file
   writeLines( modelString , con="TEMPmodel.txt" )
   #-----------------------------------------------------------------------------
-  
-  #-----------------------------------------------------------------------------
   # RUN THE CHAINS
   parameters = c( "beta0" ,  "beta1" ,  "beta2" ,
                   "beta0mu" , "beta1mu" , "beta2mu" ,
