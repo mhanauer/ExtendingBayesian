@@ -1,4 +1,4 @@
-# Jags-Ymet-XmetSsubj-MrobustHier.R 
+# Jags-Ymet-XmetSsubj-MrobustHierQuadWtMatt'sTest.R 
 # Accompanies the book:
 #  Kruschke, J. K. (2015). Doing Bayesian Data Analysis, Second Edition: 
 #  A Tutorial with R, JAGS, and Stan. Academic Press / Elsevier.
@@ -7,18 +7,21 @@ source("DBDA2E-utilities.R")
 
 #===============================================================================
 
-genMCMC = function( data , xName="x" , x2Name = "x2", yName="y" , sName="s" ,
+genMCMC = function( data , xName="x" , yName="y" , sName="s" , wName=NULL ,
                     numSavedSteps=10000 , thinSteps = 1 , saveName=NULL ,
                     runjagsMethod=runjagsMethodDefault , 
-                    nChains=nChainsDefault) { 
+                    nChains=nChainsDefault ) { 
 
   #-----------------------------------------------------------------------------
   # THE DATA.
   y = data[,yName]
   x = data[,xName]
-  x2 = data[,x2Name]
-  # Convert sName to consecutive integers:
-  s = as.numeric(factor(data[,sName]))
+  s = as.numeric(data[,sName])
+  if ( !is.null(wName) ) {
+    w = data[,wName]
+  } else {
+    w = rep(1,length(y))
+  }
   # Do some checking that data make sense:
   if ( any( !is.finite(y) ) ) { stop("All y values must be finite.") }
   if ( any( !is.finite(x) ) ) { stop("All x values must be finite.") }
@@ -26,9 +29,9 @@ genMCMC = function( data , xName="x" , x2Name = "x2", yName="y" , sName="s" ,
   # Specify the data in a list, for later shipment to JAGS:
   dataList = list(
     x = x ,
-    x2 = x2,
     y = y ,
     s = s ,
+    w = w ,
     Nsubj = max(s)  # should equal length(unique(s))
   )
   #-----------------------------------------------------------------------------
@@ -38,27 +41,26 @@ genMCMC = function( data , xName="x" , x2Name = "x2", yName="y" , sName="s" ,
   data {
     Ntotal <- length(y)
     xm <- mean(x)
-    x2m <- mean(x2)
     ym <- mean(y)
+    wm <- mean(w)
     xsd <- sd(x)
-    x2sd <- sd(x2)
     ysd <- sd(y)
     for ( i in 1:length(y) ) {
       zx[i] <- ( x[i] - xm ) / xsd
-      zx2[i] <- ( x2[i] - x2m ) / x2sd
       zy[i] <- ( y[i] - ym ) / ysd
+      zw[i] <- w[i] / wm 
     }
   }
   # Specify the model for standardized data:
   model {
     for ( i in 1:Ntotal ) {
-      zy[i] ~ dt( zbeta0[s[i]] + zbeta1[s[i]] * zx[i] , zbeta2[s[i]] * zx2[i], 1/zsigma^2 , nu )
+      zy[i] ~ dt( zbeta0[s[i]] + zbeta1[s[i]] * zx[i] + zbeta2[s[i]] * zx[i]^2 , 
+                  1/(zw[i]*zsigma)^2 , nu )
     }
     for ( j in 1:Nsubj ) {
       zbeta0[j] ~ dnorm( zbeta0mu , 1/(zbeta0sigma)^2 )  
       zbeta1[j] ~ dnorm( zbeta1mu , 1/(zbeta1sigma)^2 )
       zbeta2[j] ~ dnorm( zbeta2mu , 1/(zbeta2sigma)^2 )
-
     }
     # Priors vague on standardized scale:
     zbeta0mu ~ dnorm( 0 , 1/(10)^2 )
@@ -68,32 +70,31 @@ genMCMC = function( data , xName="x" , x2Name = "x2", yName="y" , sName="s" ,
     zbeta0sigma ~ dunif( 1.0E-3 , 1.0E+3 )
     zbeta1sigma ~ dunif( 1.0E-3 , 1.0E+3 )
     zbeta2sigma ~ dunif( 1.0E-3 , 1.0E+3 )
-
     nu ~ dexp(1/30.0)
     # Transform to original scale:
     for ( j in 1:Nsubj ) {
-      beta1[j] <- zbeta1[j] * ysd / xsd 
-      beta2[j] <- zbeta2[j] * ysd / xsd
-      beta0[j] <- zbeta0[j] * ysd  + ym - zbeta1[j] * xm * ysd / xsd 
+      beta2[j] <- zbeta2[j]*ysd/xsd^2
+      beta1[j] <- zbeta1[j]*ysd/xsd - 2*zbeta2[j]*xm*ysd/xsd^2  
+      beta0[j] <- zbeta0[j]*ysd  + ym - zbeta1[j]*xm*ysd/xsd + zbeta2[j]*xm^2*ysd/xsd^2 
     }
-    beta1mu <- zbeta1mu * ysd / xsd
-    beta2mu <- zbeta2mu * ysd / xsd
-    beta0mu <- zbeta0mu * ysd  + ym - zbeta1mu * xm * ysd / xsd 
+    beta2mu <- zbeta2mu*ysd/xsd^2
+    beta1mu <- zbeta1mu*ysd/xsd - 2*zbeta2mu*xm*ysd/xsd^2  
+    beta0mu <- zbeta0mu*ysd  + ym - zbeta1mu*xm*ysd/xsd + zbeta2mu*xm^2*ysd/xsd^2 
     sigma <- zsigma * ysd
   }
   " # close quote for modelString
   # Write out modelString to a text file
   writeLines( modelString , con="TEMPmodel.txt" )
   #-----------------------------------------------------------------------------
-  # INTIALIZE THE CHAINS.
-  # Let JAGS do it...
-  #-----------------------------------------------------------------------------
   # RUN THE CHAINS
-  parameters = c( "beta0" ,  "beta1","beta2" , "beta0mu" , "beta1mu" , "beta2mu",
-                  "zbeta0" , "zbeta1" , "zbeta2",  "zbeta0mu" , "zbeta1mu" ,"zbeta2mu",
-                  "zsigma", "sigma", "nu" , "zbeta0sigma" , "zbeta1sigma","zbeta2sigma")
+  parameters = c( "beta0" ,  "beta1" ,  "beta2" ,
+                  "beta0mu" , "beta1mu" , "beta2mu" ,
+                  "zbeta0" , "zbeta1" , "zbeta2" ,
+                  "zbeta0mu" , "zbeta1mu" , "zbeta2mu" ,
+                  "sigma" , "nu" , 
+                  "zsigma", "zbeta0sigma" , "zbeta1sigma", "zbeta2sigma" )
   adaptSteps = 1000  # Number of steps to "tune" the samplers
-  burnInSteps = 2000
+  burnInSteps = 10000 
   runJagsOut <- run.jags( method=runjagsMethod ,
                           model="TEMPmodel.txt" , 
                           monitor=parameters , 
